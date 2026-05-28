@@ -1,0 +1,48 @@
+﻿{
+  "project_name": "Antigravity Agentic SDLC",
+  "version": "1.0.0",
+  "folder_structure": {
+    "layer_separation": [
+      {
+        "layer": "Controllers",
+        "description": "ทำหน้าที่รับ HTTP Request, ตรวจสอบ Input Validation เบื้องต้น และส่งต่อให้ Service"
+      },
+      {
+        "layer": "Services",
+        "description": "ศูนย์รวม Business Logic หลักของระบบ ห้ามเขียน SQL Query ในชั้นนี้เด็ดขาด"
+      },
+      {
+        "layer": "Repositories / Mappers",
+        "description": "จัดการการเชื่อมต่อ เชื่อมโยงข้อมูล และเขียนคำสั่งติดต่อกับฐานข้อมูล (Database Access)"
+      }
+    ]
+  },
+  "naming_conventions": {
+    "database": {
+      "table_name": "snake_case (ตัวอย่าง: api_logs, user_roles)",
+      "column_name": "snake_case (ตัวอย่าง: password_hash, created_at)"
+    },
+    "backend_classes": {
+      "controllers": "ต้องลงท้ายด้วยคำว่า 'Controller' เสมอ (ตัวอย่าง: AuthController, TicketController)",
+      "services": "ต้องลงท้ายด้วยคำว่า 'Service' เสมอ (ตัวอย่าง: ConflictCheckService)",
+      "repositories": "ต้องลงท้ายด้วยคำว่า 'Repository' เสมอ (ตัวอย่าง: LogRepository)"
+    }
+  },
+  "api_standards": {
+    "response_format": {
+      "status": "success หรือ error",
+      "data": "Object หรือ Array ของข้อมูลระบบ (ส่งกลับเมื่อ success เท่านั้น)",
+      "error": {
+        "code": "String รหัสข้อผิดพลาดเฉพาะ",
+        "message": "ข้อความอธิบายความผิดพลาดสำหรับนักพัฒนา"
+      }
+    },
+    "http_status_codes": [
+      {"code": 200, "meaning": "OK - ดึงข้อมูลหรือแก้ไขข้อมูลสำเร็จ"},
+      {"code": 201, "meaning": "Created - สร้างข้อมูลใหม่ในระบบสำเร็จ"},
+      {"code": 400, "meaning": "Bad Request - ข้อมูลส่งมาไม่ถูกต้อง/ไม่ผ่าน Validation"},
+      {"code": 401, "meaning": "Unauthorized - ไม่มีสิทธิ์เข้าถึงเนื่องจากยังไม่ได้ยืนยันตัวตน"},
+      {"code": 500, "meaning": "Internal Server Error - เกิดข้อผิดพลาดที่ระบบหลังบ้าน"}
+    ]
+  }
+}
