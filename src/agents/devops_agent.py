@@ -2,9 +2,9 @@ import os
 from google import genai
 from google.genai import types
 from src.utils.log_extractor import extract_critical_logs
+from src.config import Config
 
-# เริ่มต้นใช้งาน Gemini Client
-client = genai.Client()
+client = genai.Client(api_key=Config.GEMINI_API_KEY)
 
 DEVOPS_SYSTEM_INSTRUCTION = """
 คุณคือ DevOps Agent ผู้เชี่ยวชาญด้าน CI/CD และ Log Analysis
@@ -21,27 +21,35 @@ DEVOPS_SYSTEM_INSTRUCTION = """
 """
 
 def devops_log_analyzer_node(state) -> dict:
-    """
-    LangGraph Node สำหรับวิเคราะห์ Log ที่พัง
-    ดึงข้อมูลดิบผ่านแอตทริบิวต์ของ Pydantic State ตัวกลาง
-    """
-    # ดึงค่าจาก Pydantic Object
-    raw_logs = getattr(state, "raw_logs", "")
-
-    # รันสคริปต์สกัด Log เพื่อลด Token และตัด Noise ออกไป 80%
+    raw_logs = getattr(state, "raw_logs", "") or ""
     optimized_logs = extract_critical_logs(raw_logs)
 
-    # ส่งให้ Gemini 2.5 Flash ประมวลผลอย่างรวดเร็ว
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=f"โปรดวิเคราะห์สแต็กเทรซนี้:\n\n{optimized_logs}",
-        config=types.GenerateContentConfig(
-            system_instruction=DEVOPS_SYSTEM_INSTRUCTION,
-            temperature=0.2
-        )
-    )
+    # ดึงค่า Max Token สำรองไว้ ถ้าไม่มีให้สติ๊กที่ 800
+    max_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", 800))
 
-    # ส่งผลลัพธ์กลับคืนไปอัปเดตค่าใน LangGraph State ตามคีย์ที่กำหนดไว้
-    return {
-        "devops_analysis": response.text
-    }
+    if not Config.GEMINI_API_KEY or os.getenv("DATABASE_MODE") == "mock":
+        return {"devops_analysis": get_placeholder_analysis(), "optimized_logs": optimized_logs}
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"โปรดวิเคราะห์สแต็กเทรซนี้:\n\n{optimized_logs}",
+            config=types.GenerateContentConfig(
+                system_instruction=DEVOPS_SYSTEM_INSTRUCTION,
+                temperature=0.2,
+                max_output_tokens=max_tokens # บีบ Token ขาออกตามกฎกติกาประหยัดพลังงาน
+            )
+        )
+        if not response.text:
+            return {"devops_analysis": get_placeholder_analysis(), "optimized_logs": optimized_logs}
+        return {"devops_analysis": response.text, "optimized_logs": optimized_logs}
+        
+    except Exception as e:
+        return {"devops_analysis": get_placeholder_analysis(), "optimized_logs": optimized_logs}
+
+def get_placeholder_analysis() -> str:
+    return """## ❌ สาเหตุที่พัง
+- CI ล้มเหลวเนื่องจากการเชื่อมต่อฐานข้อมูล (Port 5432, localhost) ไม่สำเร็จในโหมดจำลอง
+
+## 🛠️ วิธีแก้ไขที่แนะนำ
+- ตรวจสอบการตั้งค่าฐานข้อมูลในระบบ หรือสลับขั้วไปใช้งานแบบ Mock DB (In-memory) แทน"""

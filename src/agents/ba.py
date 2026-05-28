@@ -1,7 +1,7 @@
 import json
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
-from src.core.gemini import GeminiCore
+from core.gemini import GeminiCore
 
 # 1. กำหนด Pydantic Schema โครงสร้างที่ระบบส่วนกลางต้องการ
 class ConflictDetail(BaseModel):
