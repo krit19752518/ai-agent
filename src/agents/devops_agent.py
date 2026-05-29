@@ -21,11 +21,12 @@ DEVOPS_SYSTEM_INSTRUCTION = """
 """
 
 def devops_log_analyzer_node(state) -> dict:
-    raw_logs = getattr(state, "raw_logs", "") or ""
+    raw_logs = state.raw_logs if hasattr(state, "raw_logs") else ""
     optimized_logs = extract_critical_logs(raw_logs)
 
-    # ดึงค่า Max Token สำรองไว้ ถ้าไม่มีให้สติ๊กที่ 800
-    max_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", 800))
+    # ดึงค่า Max Token สำรองไว้ ถ้าไม่มีให้สติ๊กที่ 200 (ปรับปรุงสำหรับ Task 5.2)
+    max_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", 200))
+
 
     if not Config.GEMINI_API_KEY or os.getenv("DATABASE_MODE") == "mock":
         return {"devops_analysis": get_placeholder_analysis(), "optimized_logs": optimized_logs}

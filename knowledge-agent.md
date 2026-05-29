@@ -10,7 +10,7 @@
 การทำ Multi-Agent SDLC ต้องการระบบที่สามารถจัดเก็บข้อมูลบริบท (Context) ของการทำงานที่ไหลผ่านแต่ละ Node ของขบวนการได้อย่างสมบูรณ์ โดยอิงหลักการ **Cyclic Workflows & Human-in-the-loop**
 
 ### 💡 แนวทางปฏิบัติที่ดีที่สุด (Best Practices)
-1. **ใช้ `TypedDict` เพื่อควบคุม Schema**: ป้องกันปัญหา Type-mismatch ระหว่างการส่งต่อไม้ระหว่าง Agent Node
+1. **การปรับเปลี่ยนมาใช้ `Pydantic BaseModel` (พัฒนาจากเดิมที่ใช้ `TypedDict`)**: เพิ่มความรัดกุมในการตรวจสอบชนิดข้อมูล (Type Safety), การให้ค่าตั้งต้น (Default Values), และแก้ปัญหา linter อย่าง Pyrefly ได้อย่างเด็ดขาด
 2. **แยกสถานะควบคุมและข้อมูลบริบท (State Separation)**:
    - **Control State (สถานะควบคุม)**: ข้อมูลสำคัญในการเลือกเส้นทาง (Routing) เช่น `linear_issue_id`, `risk_score`, `approval_status` ( gate สำหรับมนุษย์ตรวจสอบ )
    - **Context State (ข้อมูลบริบท)**: ข้อมูลดิบที่ถูกแปลงให้อยู่ในรูปของ Markdown เช่น `issue_details`, `db_schema`, `pr_diff` เพื่อให้พร้อมนำไปป้อนเป็น System Instruction ให้กับ Agent ถัดไป
@@ -78,3 +78,29 @@
    [tool.pyright]
    extraPaths = ["."]
    ```
+
+---
+
+## 5. การกำกับดูแลโดยมนุษย์และการป้องกันระบบ (Human-in-the-Loop & Governance Gateway)
+
+### 📌 แนวคิดการออกแบบ
+ระบบ Agentic SDLC ที่มีการทำงานระดับโปรดักชัน หรือมีความเสี่ยงในการแก้ไขโค้ด/Deploy จำเป็นต้องมี "จุดแวะพัก" (Interrupt) ให้มนุษย์ (Tech Lead / QA) เป็นผู้อนุมัติก่อนการเปลี่ยนแปลงสำคัญ เพื่อคงกฎ "AI assists, human decides" อย่างเคร่งครัด
+
+### 💡 แนวทางปฏิบัติที่ดีที่สุด (Best Practices)
+1. **ใช้ LangGraph `interrupt_before`**: กำหนดจุดแวะพักก่อน Node ที่มีความเสี่ยงสูง (เช่น `prod_deploy`) เพื่อหยุดการทำงานของ Graph ชั่วคราว
+2. **การจัดเก็บสถานะด้วย MemorySaver/SqliteSaver**: ใช้ Checkpointer เพื่อบันทึกสถานะของ Graph ไว้ในหน่วยความจำหรือฐานข้อมูล ทำให้สามารถ Resume กลับมาทำต่อได้หลังจากมนุษย์กดยืนยัน (Approve/Reject)
+3. **สร้าง Governance API Gateway**: พัฒนา FastAPI Endpoint (เช่น `POST /api/agent/review`) สำหรับรับสัญญาณและ Comment จากหน้า UI ภายนอก แล้วใช้คำสั่ง `update_state` และ `stream(None)` ของ LangGraph เพื่อปลดล็อกและเดินเครื่องต่อ
+
+---
+
+## 6. ความทนทานของระบบและการจัดการข้อผิดพลาด (Resilience, Retry & Failover)
+
+### 📌 แนวคิดการออกแบบ
+โมดูลต่างๆ เช่น การดึง Schema จาก Database หรือการคุยกับภายนอกผ่าน MCP มีโอกาสที่ Network จะหลุด หรือ Service ดาวน์ ระบบ Agentic ที่ดีต้องไม่ล่ม แต่ต้องมีแผนสำรอง (Fallback) ที่ให้ทำงานต่อไปได้
+
+### 💡 แนวทางปฏิบัติที่ดีที่สุด (Best Practices)
+1. **Exponential Backoff Retry**: เมื่อเกิดข้อผิดพลาดในการเชื่อมต่อ (เช่น `psycopg2.OperationalError`) ให้พยายามเชื่อมต่อใหม่ 3 ครั้ง โดยเพิ่มระยะเวลาหน่วง (0.5s, 1s, 2s)
+2. **In-Memory Mock Fallback**: หากลองครบตามจำนวนแล้วยังไม่สำเร็จ ให้สลับไปใช้ข้อมูลจำลอง (Mock Data) อัตโนมัติ (เช่น `MOCK_FALLBACK_SCHEMA`) เพื่อให้ Workflow หลักไม่ถูกบล็อกและ Agent ตัวอื่นๆ ยังสามารถทำงานต่อไปได้
+3. **การบังคับใช้ Pydantic BaseModel (Strict Typing)**:
+   - เปลี่ยนจากการใช้ `TypedDict` เป็น `Pydantic BaseModel` ใน `AgentState` เพื่อความเสถียร (Type Safety) และเข้ากันได้ดีเยี่ยมกับการตรวจสอบ (Validation) ของเครื่องมือ Linter
+   - การลด Token ขาออก (Token Optimization): ตั้งค่า `max_output_tokens=200` ในระดับ LLM Configuration (เช่น `GeminiCore`) เพื่อควบคุมขนาดข้อความที่เอเจนต์สร้างขึ้น ช่วยให้ประหยัดงบประมาณและทำให้ผลลัพธ์กระชับตรงประเด็น

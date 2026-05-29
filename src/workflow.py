@@ -1,48 +1,50 @@
 import sys
 import os
-from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 # รองรับการดึงโมดูลข้ามโฟลเดอร์สำหรับโครงสร้างแบบ src/
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+try:
+    from core.state import AgentState
+except ImportError:
+    from src.core.state import AgentState
+
 # นำเข้าฟังก์ชันจากโครงสร้าง Agents (ครอบคลุม Fallback ป้องกันไฟล์ว่างแล้วแอปค้าง)
 try:
     from agents.devops_agent import devops_log_analyzer_node
 except ImportError:
-    def devops_log_analyzer_node(state): return {"devops_analysis": "## 🛠️ DevOps Log\n- No errors found."}
+    try:
+        from src.agents.devops_agent import devops_log_analyzer_node
+    except ImportError:
+        def devops_log_analyzer_node(state): return {"devops_analysis": "## 🛠️ DevOps Log\n- No errors found."}
 
 try:
     from agents.sa import review_architecture_compliance
 except ImportError:
-    review_architecture_compliance = None
+    try:
+        from src.agents.sa import review_architecture_compliance
+    except ImportError:
+        review_architecture_compliance = None
 
 try:
     from agents.qa import generate_test_matrix
 except ImportError:
-    generate_test_matrix = None
+    try:
+        from src.agents.qa import generate_test_matrix
+    except ImportError:
+        generate_test_matrix = None
 
 try:
     from agents.pm import calculate_base_risk_score, analyze_sprint_risk
 except ImportError:
-    calculate_base_risk_score, analyze_sprint_risk = None, None
+    try:
+        from src.agents.pm import calculate_base_risk_score, analyze_sprint_risk
+    except ImportError:
+        calculate_base_risk_score, analyze_sprint_risk = None, None
 
 
-class AgentState(BaseModel):
-    jira_ticket_id: str = Field(default="", description="ID ของตั๋วงาน Jira เช่น ANTG-101")
-    raw_requirement: str = Field(default="", description="ข้อกำหนดหรือคำอธิบายงานดิบจากตั๋ว")
-    brd_analysis: str = Field(default="", description="ผลวิเคราะห์จาก BA")
-    api_specification: dict = Field(default_factory=dict, description="API Spec จาก SA")
-    ui_component_mapping: str = Field(default="", description="Component จาก UX")
-    generated_code_paths: list[str] = Field(default_factory=list, description="รายชื่อไฟล์โค้ด Boilerplate")
-    architecture_compliance_report: str = Field(default="", description="ผลวิเคราะห์จาก SA Code Review")
-    test_matrix_markdown: str = Field(default="", description="ตาราง QA Test Matrix")
-    raw_logs: str = Field(default="", description="Log ดิบยาวๆ จากระบบ CI")
-    devops_analysis: str = Field(default="", description="ผลวิเคราะห์จาก DevOps Agent")
-    sprint_risk_score: int = Field(default=0, description="คะแนนความเสี่ยงประเมินโดย PM")
-    risk_radar_report: str = Field(default="", description="รายงาน Sprint Risk Radar")
-    downstream_report: str = Field(default="", description="รายงานสรุปรวมผลลัพธ์ปลายน้ำ")
 
 
 # =====================================================================

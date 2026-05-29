@@ -1,7 +1,47 @@
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import List, Dict, Any
-from src.config import Config
+from config import Config
+
+# Mock Database Schema Blueprint for Failover (In-Memory Fallback)
+MOCK_FALLBACK_SCHEMA = [
+    {
+        "table_name": "users",
+        "column_name": "id",
+        "data_type": "integer",
+        "is_nullable": "NO",
+        "constraints": "PRIMARY KEY"
+    },
+    {
+        "table_name": "users",
+        "column_name": "email",
+        "data_type": "character varying",
+        "is_nullable": "NO",
+        "constraints": "UNIQUE"
+    },
+    {
+        "table_name": "users",
+        "column_name": "password_hash",
+        "data_type": "character varying",
+        "is_nullable": "NO",
+        "constraints": "None"
+    },
+    {
+        "table_name": "api_logs",
+        "column_name": "id",
+        "data_type": "uuid",
+        "is_nullable": "NO",
+        "constraints": "PRIMARY KEY"
+    },
+    {
+        "table_name": "api_logs",
+        "column_name": "headers",
+        "data_type": "jsonb",
+        "is_nullable": "YES",
+        "constraints": "None"
+    }
+]
 
 # Strict Read-Only Metadata Query (Zero Row-Data Exposure)
 METADATA_QUERY = """
@@ -76,38 +116,48 @@ def parse_schema_to_markdown(raw_rows: List[Dict[str, Any]]) -> str:
 
 def get_database_schema() -> str:
     """
-    Fetches PostgreSQL schema metadata using read-only query logic
-    and returns a Markdown table representation of all tables.
+    Fetches PostgreSQL schema metadata using read-only query logic,
+    retrying 3 times with exponential backoff on connection errors,
+    and falling back to an in-memory mock schema if all retries fail.
     """
-    # Verify environment values are supplied
+    # Verify environment values are supplied, if not fallback immediately
     if not all([Config.DB_NAME, Config.DB_USER, Config.DB_PASSWORD]):
-        return (
-            "Error: Database configurations are incomplete.\n"
-            "Please check DB_NAME, DB_USER, and DB_PASSWORD in environment variables."
-        )
+        print("[DB Failover] Configs incomplete. Falling back to Mock Schema Blueprint.")
+        return parse_schema_to_markdown(MOCK_FALLBACK_SCHEMA)
 
+    max_retries = 3
+    backoff_delay = 0.5
     conn = None
-    try:
-        # Establish connection with PostgreSQL (Read-Only context should be enforced at DB-user privilege level)
-        conn = psycopg2.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            database=Config.DB_NAME,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            connect_timeout=5
-        )
-        
-        # Enforce read-only transaction state on this connection session as a failsafe
-        conn.set_session(readonly=True, autocommit=True)
-        
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(METADATA_QUERY)
-            rows = [dict(row) for row in cursor.fetchall()]
-            return parse_schema_to_markdown(rows)
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            conn = psycopg2.connect(
+                host=Config.DB_HOST,
+                port=Config.DB_PORT,
+                database=Config.DB_NAME,
+                user=Config.DB_USER,
+                password=Config.DB_PASSWORD,
+                connect_timeout=2
+            )
+            # Enforce read-only transaction state on this connection session as a failsafe
+            conn.set_session(readonly=True, autocommit=True)
             
-    except Exception as e:
-        return f"Failed to retrieve database schema: {str(e)}"
-    finally:
-        if conn:
-            conn.close()
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(METADATA_QUERY)
+                rows = [dict(row) for row in cursor.fetchall()]
+                return parse_schema_to_markdown(rows)
+                
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as conn_err:
+            print(f"[DB Connect Attempt {attempt}/{max_retries}] Operational error occurred: {conn_err}")
+            if attempt == max_retries:
+                print("[DB Connect Failover] Max retries reached. Returning in-memory fallback schema.")
+                return parse_schema_to_markdown(MOCK_FALLBACK_SCHEMA)
+            time.sleep(backoff_delay)
+            backoff_delay *= 2
+        except Exception as other_err:
+            print(f"[DB Connect Attempt {attempt}/{max_retries}] Unexpected error: {other_err}")
+            return parse_schema_to_markdown(MOCK_FALLBACK_SCHEMA)
+        finally:
+            if conn:
+                conn.close()
+

@@ -79,10 +79,37 @@
 *เป้าหมาย: ปรับโครงสร้างระบบแกนหลักให้เสถียร เชื่อมโยงฐานข้อมูล พร้อมระบบ Retry/Failover*
 
 ### 📋 Task 5.1: Database Connection Retry & Failover Logic
-* [ ] **[AI]** พัฒนาลอจิก Retry 3 ครั้ง + Fallback ไปใช้ In-Memory Mock Schema ใน `db_schema.py` เมื่อเกิด OperationalError
-* [ ] **[AI]** เขียน Unit Test ใน `tests/test_db_schema.py` เพื่อจำลองกรณี PostgreSQL ออฟไลน์
+* [x] **[AI]** พัฒนาลอจิก Retry 3 ครั้ง + Fallback ไปใช้ In-Memory Mock Schema ใน `db_schema.py` เมื่อเกิด OperationalError
+* [x] **[AI]** เขียน Unit Test ใน `tests/test_db_schema.py` เพื่อจำลองกรณี PostgreSQL ออฟไลน์
 
 ### 📋 Task 5.2: State Refactoring & Mapping
-* [ ] **[Human]** แก้ไขโครงสร้าง `AgentState` ใน `src/core/state.py` ให้เป็น Pydantic BaseModel เพื่อความเสถียรของ Type
-* [ ] **[AI]** อัปเดต Wrapper และการเรียกใช้เอเจนต์ทั้ง 7 ตัว (BA, SA, UX, Dev, QA, PM, DevOps) ให้ดึง/เขียนค่าผ่าน Pydantic State และคุมความยาวใต้ 200 Tokens
-* [ ] **[AI]** เขียน Unit Test ย่อยจำลองการทำงานของเวิร์กโฟลว์ด้วย Pydantic State และตรวจสอบระดับ Tokens ที่ใช้จริงในระบบทดสอบหลัก
+* [x] **[Human]** แก้ไขโครงสร้าง `AgentState` ใน `src/core/state.py` ให้เป็น Pydantic BaseModel เพื่อความเสถียรของ Type
+* [x] **[AI]** อัปเดต Wrapper และการเรียกใช้เอเจนต์ทั้ง 7 ตัว (BA, SA, UX, Dev, QA, PM, DevOps) ให้ดึง/เขียนค่าผ่าน Pydantic State และคุมความยาวใต้ 200 Tokens
+* [x] **[AI]** เขียน Unit Test ย่อยจำลองการทำงานของเวิร์กโฟลว์ด้วย Pydantic State และตรวจสอบระดับ Tokens ที่ใช้จริงในระบบทดสอบหลัก
+
+---
+
+## 🎭 PHASE 6: AI WEB RECORD & REPLAY WITH PLAYWRIGHT
+*เป้าหมาย: พัฒนาและเชื่อมต่อโมดูล Replay สำหรับรัน Automated Tests จาก UI Action Events*
+
+### 📋 Task 6.1: Update Pydantic AgentState (Task 5.2 Extended)
+* [ ] **[Human]** ปรับโครงสร้างไฟล์ `src/core/state.py` เปลี่ยนจาก TypedDict ไปใช้ Pydantic `BaseModel` ร่วมกับ Field เพื่อควบคุมความปลอดภัยของชนิดข้อมูล
+* [ ] **[AI]** นำตัวแปรสถานะทั้งหมดของ Agent 7 ตัวจาก `src/workflow.py` มารวบไว้ที่ `src/core/state.py` ให้เป็นที่เดียว
+* [ ] **[AI]** เพิ่มฟิลด์ควบคุมการรัน Playwright: `recorded_steps: list[dict]`, `dom_snapshots: list[str]`, `playwright_script: str`, `playwright_logs: str`, `playwright_retry_count: int`
+* [ ] **[Human]** เขียน Unit Test `tests/test_state_replay.py` เพื่อตรวจสอบความเสถียรในการสร้างคลาส Pydantic State และการโหลด JSON/Dict เข้าสู่ Model
+
+### 📋 Task 6.2: Upgrade QA Agent (Playwright Script Writer)
+* [ ] **[AI]** เขียน System Instruction ชุดใหม่ (`PLAYWRIGHT_SYSTEM_INSTRUCTION`) ใน `src/agents/qa.py` สั่งให้ Gemini 2.5 Pro แปลง DOM Events เป็นโค้ด Python Playwright
+* [ ] **[AI]** พัฒนาฟังก์ชัน `generate_playwright_script(recorded_steps: list, dom_snapshots: list) -> str` คุยผ่าน Gemini 2.5 Pro ด้วยพารามิเตอร์ประหยัด Token และ Deterministic (Temp 0.1)
+* [ ] **[Human]** เขียน Unit Test `tests/test_qa_playwright.py` ทดสอบส่ง Mock Event (เช่น Click `#submit-btn`) และเช็กว่าผลลัพธ์เป็น Code Script ที่สามารถรันได้จริง
+
+### 📋 Task 6.3: Create Execution Node & Governance Gateway
+* [ ] **[AI]** สร้าง Node `qa_playwright_node` และ `playwright_execution_node` ใน `src/workflow.py` 
+* [ ] **[AI]** ใน `playwright_execution_node` พัฒนาส่วนรันโค้ด Python ผ่าน `subprocess.run` และดัก Error Stack Trace ส่งเข้าตัวแปร `playwright_logs`
+* [ ] **[Human]** ล็อกและลงทะเบียนจุดหยุดรอเพื่อขออนุมัติจากผู้ใช้ `interrupt_before=["playwright_execution_node"]` ใน Graph Compile เพื่อให้สัญญาณ Human Approval (Governance Gateway)
+* [ ] **[Human]** เขียน Unit Test `tests/test_playwright_execution.py` ทดสอบการกระตุ้นรันแบบ Mock Run และจับ Error Stack Trace
+
+### 📋 Task 6.4: Fallback & Retry (DevOps Integration)
+* [ ] **[AI]** พัฒนาเงื่อนไขวนซ้ำ (Conditional Edge) ใน `src/workflow.py` สำหรับ `playwright_execution_node` หากพังและ `playwright_retry_count < 3` ให้บวกค่า Retry และวิ่งกลับไปให้ QA Agent เขียนสคริปต์ใหม่โดยแนบ Stack Trace ไปด้วย
+* [ ] **[AI]** หากลองครบ 3 ครั้งยังพัง ให้โยนสถานะไปยัง `devops_analyzer` เพื่อวิเคราะห์ Root Cause และรายงานผลเป็นภาษาไทย
+* [ ] **[Human]** เขียน Integration Test สำหรับตรวจการเกิด Loop ย้อนกลับและข้ามไปยัง DevOps Agent ในกรณีที่พังจนหมดโควตา Retry

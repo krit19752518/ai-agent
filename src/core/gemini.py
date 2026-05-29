@@ -29,7 +29,8 @@ class GeminiCore:
         system_instruction: Optional[str] = None, 
         temperature: float = 0.1,
         response_mime_type: Optional[str] = None,
-        response_schema: Optional[Any] = None
+        response_schema: Optional[Any] = None,
+        max_output_tokens: Optional[int] = 200 # ปรับปรุงตาม Task 5.2
     ) -> Any:  # 👈 เปลี่ยนจาก str เป็น Any เพราะฟังก์ชันนี้คืนค่าได้ทั้ง dict, list, และ str
         """
         Uses 'gemini-2.5-pro' for tasks requiring high reasoning capabilities,
@@ -39,7 +40,8 @@ class GeminiCore:
             temperature=temperature,
             system_instruction=system_instruction,
             response_mime_type=response_mime_type,
-            response_schema=response_schema
+            response_schema=response_schema,
+            max_output_tokens=max_output_tokens
         )
         try:
             response = self.client.models.generate_content(
@@ -63,7 +65,8 @@ class GeminiCore:
         self, 
         prompt: str, 
         system_instruction: Optional[str] = None, 
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        max_output_tokens: Optional[int] = 200 # ปรับปรุงตาม Task 5.2
     ) -> str:  # 👈 ตัวนี้ยังคงเป็น str ปลอดภัย
         """
         Uses 'gemini-2.5-flash' for high-throughput, latency-sensitive tasks
@@ -71,7 +74,8 @@ class GeminiCore:
         """
         config = types.GenerateContentConfig(
             temperature=temperature,
-            system_instruction=system_instruction
+            system_instruction=system_instruction,
+            max_output_tokens=max_output_tokens
         )
         try:
             response = self.client.models.generate_content(
